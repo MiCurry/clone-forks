@@ -1,0 +1,117 @@
+#!/bin/bash
+
+# clone_repo() - git clone a repository given a url and an optinal clone name
+#
+# Arguments:
+# $1 - Valid git repository - ssh or https
+# $2 - Remote nick name (curry, MPAS-Dev, etc.)
+# $3 - optional - clone nickname
+#
+# git clone $1 -o $2 $3
+clone_repo() 
+{
+    git clone $1 -o $2 $3
+
+    if [ $? -ne 0 ]; then
+        echo "clone-fork: Error cloning $1 with nickname $2"
+        exit -1
+    fi
+
+    return 0
+}
+
+
+# add_remote() - Add remotes to a git clone. This function must be called
+# within the a clone directory.
+#
+# Arguments:
+# $1 - remote-name
+# $2 - URL - HTTPS or SSH
+#
+add_remote()
+{
+    remote=$1
+    url=$2
+
+    echo Adding remote $remote $url
+    git remote add $remote $url
+
+    if [ $? -ne 0 ]; then
+        echo "clone-fork: Error adding remote '$remote' with URL: $url"
+        exit -1
+    fi
+}
+
+
+# Main 
+#
+
+if [ $# -ne 2 ] ; then
+    echo "usage: clone-forks repo-nick-name clone-name"
+    exit
+fi
+
+if [ ! -f ~/.repos ]; then
+    echo "No '.repos' file found in ~/"
+    echo "Please make sure one is there!"
+    exit
+fi
+
+repo=$1
+cloneName=$2
+do_clone=0
+do_remote=0
+eof=''
+
+while IFS= read -r line; do
+
+    # Break the line, regardless of what it is..
+    IFS=' '
+    read -a str <<< $line
+    remoteName=${str[0]}
+    remoteURL=${str[1]}
+
+    # Skip lines that start with '#'
+    if [[ $line =~ "#" ]] ; then
+        continue
+    fi
+    
+
+    # Create the clone with the first listed remote
+    if [ $do_clone == 1 ]; then
+        clone_repo $remoteURL $remoteName $cloneName
+        do_clone=0
+        do_remote=1
+        cd $cloneName
+        continue
+    fi
+    
+    # Determine if we need to stop adding remotes i.e. empty line
+    if [ "$line" = "$eof" ] || [ "$line" = "" ] && [ $do_remote == 1 ]; then
+        do_remote=0
+        break
+    fi
+
+    # Add remotes
+    if [ $do_remote == 1 ]; then
+        add_remote $remoteName $remoteURL
+    fi
+
+    # If we match the repo with a '=' do clone on the next line in the ~/.repos
+    # file
+    if [[ $line =~ "= ${repo}" ]] && [[ $do_clone -ne 1 ]] ; then
+        do_clone=1
+    fi
+
+done < ~/.repos
+
+git fetch --all
+
+if [ $? -ne 0 ]; then
+    echo "clone-fork: Error fetching remotes"
+    exit -1
+fi
+
+echo "All remotes added and fetched succsfully!"
+cd ..
+exit 0
