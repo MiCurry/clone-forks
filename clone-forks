@@ -113,5 +113,6 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "All remotes added and fetched succsfully!"
+echo "Cloned into: ./$cloneName"
 cd ..
 exit 0
